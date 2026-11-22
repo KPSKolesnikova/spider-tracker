@@ -228,7 +228,7 @@ function renderSteps() {
   const entry=day();
   $('stepCount').textContent=$('stepsNow').textContent=number(entry.steps).toLocaleString('ru-RU');
   $('activityForm').elements.steps.placeholder=number(entry.steps).toLocaleString('ru-RU');
-  $('stepsSource').textContent=entry.stepsSource==='sensor'?'Оценка по датчику':entry.stepsSource==='manual'?'Запись за день':'За сегодня';
+  $('stepsSource').textContent=({health:'Из «Здоровья» iPhone',sensor:'Оценка по датчику',manual:'Запись за день'})[entry.stepsSource]??'За сегодня';
 }
 let counting=false, motionTimer, previousSignal, previousTime=0, lastStep=0, pendingSteps=0, hadSample=false;
 function resetMotion() {
@@ -239,7 +239,7 @@ function resetMotion() {
   hadSample=false;
 }
 function onMotion(event) {
-  if (document.hidden || !counting) return;
+  if (document.hidden || !counting || healthToken) return;
   const sensor=event.accelerationIncludingGravity;
   if (!sensor || ![sensor.x,sensor.y,sensor.z].every(Number.isFinite)) return;
   hadSample=true;
@@ -278,14 +278,15 @@ function setPedometer(enabled,message) {
       if(!hadSample&&!document.hidden) setPedometer(false,'Датчик не передаёт данные. Попробуй на телефоне или внеси итог вручную.');
     },3500);
   }
-  $('togglePedometer').textContent=enabled?'Остановить шагомер':'Включить шагомер';
+  $('togglePedometer').textContent=enabled?'Остановить датчик браузера':'Включить датчик браузера';
   $('pedometerStatus').textContent=message;
 }
 $('togglePedometer').onclick=async()=>{
-  if(counting) return setPedometer(false,'Шагомер выключен');
+  if(counting) return setPedometer(false,'Датчик браузера выключен');
   if(!('DeviceMotionEvent' in window)) return setPedometer(false,'У этого браузера нет доступа к датчику движения.');
   try {
     if(typeof DeviceMotionEvent.requestPermission==='function' && await DeviceMotionEvent.requestPermission()!=='granted') return setPedometer(false,'Разрешение на датчик не предоставлено.');
+    if(healthToken) return;
     setPedometer(true,'Считаю шаги, пока приложение открыто');
   } catch {
     setPedometer(false,'Датчик недоступен. Шаги можно записать вручную.');
@@ -296,6 +297,108 @@ document.addEventListener('visibilitychange',()=>{
   resetMotion();
   $('pedometerStatus').textContent=document.hidden?'Шагомер приостановлен':'Считаю шаги, пока приложение открыто';
 });
+
+const healthTokenKey=KEY+'-health-token';
+let healthToken=loadHealthToken();
+
+function loadHealthToken() {
+  try { return localStorage.getItem(healthTokenKey)??''; }
+  catch { return ''; }
+}
+function renderHealthSetup() {
+  const connected=Boolean(healthToken);
+  $('healthSetup').hidden=!connected;
+  $('connectHealth').hidden=connected;
+  $('togglePedometer').disabled=connected;
+  if (!connected) return;
+  const url=new URL('./',location.href);
+  url.hash='health='+healthToken+'&steps=';
+  $('healthPrefix').value=url.href;
+}
+function healthMessage(message) {
+  $('healthStatus').textContent=message;
+}
+$('connectHealth').onclick=()=>{
+  try {
+    const bytes=crypto.getRandomValues(new Uint8Array(16));
+    const token=Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
+    localStorage.setItem(healthTokenKey,token);
+    healthToken=token;
+  } catch {
+    healthMessage('Браузер не смог сохранить настройку. Открой трекер в обычной вкладке Safari.');
+    return;
+  }
+  if(counting) setPedometer(false,'Датчик браузера выключен');
+  renderHealthSetup();
+  $('healthInstructions').open=true;
+  healthMessage('Создай команду на iPhone, чтобы обновлять шаги при открытии трекера.');
+  $('healthInstructions').querySelector('summary')?.focus();
+};
+$('disconnectHealth').onclick=()=>{
+  try { localStorage.removeItem(healthTokenKey); }
+  catch {
+    healthMessage('Не удалось отключить импорт в этом браузере.');
+    return;
+  }
+  healthToken='';
+  $('healthPrefix').value='';
+  renderHealthSetup();
+  healthMessage('Импорт отключён. Уже записанные шаги остались в дневнике.');
+  $('connectHealth').focus();
+};
+$('copyHealthPrefix').onclick=async()=>{
+  try {
+    await navigator.clipboard.writeText($('healthPrefix').value);
+    healthMessage('Префикс скопирован. Вставь его в действие URL в «Командах».');
+  } catch {
+    $('healthPrefix').select();
+    healthMessage('Выделила префикс. Скопируй его через меню Safari.');
+  }
+};
+
+function healthUpdate(params,today) {
+  if (!healthToken||params.getAll('health').length!==1||params.get('health')!==healthToken) {
+    return {error:'Этот браузер не подключён к команде. Открой «Движение» и проверь префикс.'};
+  }
+  const raw=(params.get('steps')??'').trim();
+  if (params.getAll('steps').length!==1||!/^\d{1,3}(?:[ \u00a0\u202f]\d{3})*$|^\d{1,6}$/.test(raw)) {
+    return {error:'Команда не передала число шагов. Выбери свойство «Значение» в действии URL.'};
+  }
+  const steps=Number(raw.replace(/[ \u00a0\u202f]/g,''));
+  const dayKey=params.get('date')??today;
+  if (steps>100000||!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)||dayKey>today||dayKey<addDays(today,-30)||dateKey(localDate(dayKey))!==dayKey) {
+    return {error:'Число шагов или дата вышли за допустимый диапазон.'};
+  }
+  return {steps,dayKey};
+}
+function receiveHealthLink() {
+  const raw=location.hash.slice(1);
+  if (!raw.startsWith('health=')) return false;
+  const params=new URLSearchParams(raw);
+  history.replaceState(null,'',location.pathname+location.search);
+  const result=healthUpdate(params,date());
+  if (result.error) {
+    tab('activity');
+    healthMessage(result.error);
+    return true;
+  }
+  const {dayKey,steps}=result;
+  const previous=state.days[dayKey];
+  state.days[dayKey]={foods:[],water:0,minutes:0,mood:'',...previous,steps,stepsSource:'health',healthUpdatedAt:Date.now()};
+  if (!persistLocal()) {
+    if(previous) state.days[dayKey]=previous;
+    else delete state.days[dayKey];
+    tab('activity');
+    healthMessage('Не удалось записать шаги в браузере.');
+    return true;
+  }
+  render();
+  renderDashboard();
+  tab('activity');
+  healthMessage('Из «Здоровья» записано '+steps.toLocaleString('ru-RU')+' шагов · '+shortDate(dayKey)+'.');
+  return true;
+}
+window.addEventListener('hashchange',receiveHealthLink);
 
 function renderDashboard() {
   const entry=day(), now=date(), week=currentWeek(), today=sessionsFor(week).find(item=>item.key===now);
@@ -339,3 +442,12 @@ window.addEventListener('tracker-tab',()=>{
 persistLocal();
 renderDashboard();
 renderFeatureTab();
+renderHealthSetup();
+if(!receiveHealthLink() && healthToken) {
+  const last=Object.entries(state.days).filter(([,entry])=>entry.stepsSource==='health'&&entry.healthUpdatedAt).sort(([a],[b])=>b.localeCompare(a))[0];
+  if(last) {
+    healthMessage('Последний импорт · '+shortDate(last[0])+' · '+number(last[1].steps).toLocaleString('ru-RU')+' шагов. Для обновления открой трекер через команду.');
+  } else {
+    healthMessage('Префикс создан. Запусти команду на iPhone для первого импорта.');
+  }
+}

@@ -11,10 +11,32 @@
 </section>
 <section class="tab" id="food"><h1>Питание</h1><div class="card"><div class="row"><h2>Меню на день</h2><span class="status-good">≈ 1700 ккал</span></div><p class="muted">Пять приёмов пищи с порциями. Можно готовить дома или собрать похожий приём из готовой еды.</p><div id="mealPlan"></div><p class="foot">Вес курицы, гречки и лосося указан после приготовления, хлопьев — в сухом виде. Калорийность приблизительная. Для готовых блюд пользуйся этикеткой: ккал на 100 г × вес порции ÷ 100.</p><p class="foot">Каталоги: <a href="https://lavka.yandex.ru/" rel="noreferrer">Яндекс Лавка</a> · <a href="https://dixy.ru/product/khlopya-ovsyanye-yasno-solnyshko-2-500g-1041032607/" rel="noreferrer">Дикси</a> · <a href="https://magnit.ru/catalog/118213-do_i_posle_trenirovok?page=2" rel="noreferrer">Магнит</a> · <a href="https://vkusvill.ru/goods/osoboe-pitanie/bez-dobavlennogo-sakhara/molochnye-produkty/yogurty/" rel="noreferrer">ВкусВилл</a> · <a href="https://samokat.ru/" rel="noreferrer">Самокат</a>. Примеры поиска, ассортимент зависит от адреса.</p><button class="btn alt" id="useMealGoal">Поставить цель 1700 ккал</button></div><div class="card"><h2>Записать своё блюдо</h2><form id="foodForm"><label class="field">Продукт / блюдо<input name="name" required maxlength="90"></label><div class="cards"><label class="field">Ккал<input name="cal" type="number" min="0" max="5000" required></label><label class="field">Белки, г<input name="p" type="number" min="0" step=".1" required></label><label class="field">Жиры, г<input name="f" type="number" min="0" step=".1" required></label><label class="field">Углеводы, г<input name="c" type="number" min="0" step=".1" required></label></div><button class="btn" type="submit">+ ЗАПИСАТЬ</button></form></div><div class="card"><h2>Дневник за сегодня</h2><div id="macros"></div><div id="foodList"></div></div></section>
 <section class="tab" id="activity"><h1>Активность</h1>
-  <div class="card"><div class="row"><h2>Шагомер</h2><strong class="number" id="stepCount">0</strong></div><p id="pedometerStatus" class="muted" role="status">Шагомер выключен</p>
-    <div class="steps-controls"><button class="btn" id="togglePedometer">Включить шагомер</button><button class="btn alt" id="saveSteps" type="submit" form="activityForm">Сохранить запись</button></div>
-    <p class="foot">Датчик телефона считает шаги примерно, пока трекер открыт на экране. После блокировки и закрытия страницы браузер не считает шаги. Для итога за день используй «Здоровье» на iPhone и перенеси число сюда.</p>
-    <form id="activityForm"><div class="cards"><label class="field">Шаги за день<input type="number" name="steps" min="0" max="100000"></label><label class="field">Минуты активности<input type="number" name="minutes" min="0" max="1440"></label></div></form>
+  <div class="card"><div class="row"><h2>Шагомер</h2><strong class="number" id="stepCount">0</strong></div>
+    <div class="steps-controls"><button class="btn" id="connectHealth" type="button">Подключить «Здоровье» iPhone</button></div>
+    <p class="muted" id="healthStatus" role="status">iPhone считает шаги даже при закрытом Safari. Команда может перенести накопленный итог, когда откроет трекер.</p>
+    <div id="healthSetup" hidden>
+      <details id="healthInstructions">
+        <summary>Настроить импорт шагов</summary>
+        <ol>
+          <li>На iPhone открой «Команды» и создай команду <strong>SPIDER TRACKER</strong>.</li>
+          <li>Добавь действие <strong>Найти образцы здоровья</strong> (<span lang="en">Find Health Samples</span>). Выбери «Шаги», дату начала «Сегодня», группировку «По дням». Лимит выключи.</li>
+          <li>Добавь действие <strong>URL</strong>. Вставь префикс ниже и сразу после знака «=» вставь переменную результата поиска. Нажми на переменную и выбери её свойство «Значение» (<span lang="en">Value</span>), чтобы подставилось число шагов.</li>
+          <li>Добавь <strong>Открыть URL</strong> и запусти команду. Разреши чтение <strong>шагов</strong> в «Здоровье». При первом запуске сравни итог со «Здоровьем», особенно если используешь Apple Watch.</li>
+          <li>В настройках команды выбери «На экран Домой». Запускай трекер этой иконкой: она обновит шаги и откроет сайт. Настраивай импорт и пользуйся трекером в одном браузере. У отдельно установленной веб-версии может быть своё хранилище.</li>
+        </ol>
+        <p class="foot">Для обновления по расписанию можно выбрать «Команды → Автоматизация → Время суток → Запускать немедленно» и указать эту команду. Выбери время, когда iPhone обычно разблокирован: открытие Safari и чтение данных могут потребовать разблокировки. <a href="https://support.apple.com/guide/shortcuts/add-automations-apdfbdbd7123/ios" rel="noreferrer">Автоматизация в iOS</a></p>
+        <label class="field">Префикс для действия URL<input id="healthPrefix" type="text" readonly autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+        <div class="steps-controls"><button class="btn alt" id="copyHealthPrefix" type="button">Скопировать префикс</button><button class="btn alt" id="disconnectHealth" type="button">Отключить импорт</button></div>
+        <p class="foot">Префикс привязан к этому браузеру. Ссылка передаёт число через фрагмент адреса, который обрабатывается на устройстве. Не пересылай ссылку. <a href="https://support.apple.com/en-us/108779" rel="noreferrer">Источники шагов в «Здоровье»</a> · <a href="https://support.apple.com/guide/shortcuts/apd735880972/ios" rel="noreferrer">Как добавить иконку команды</a></p>
+      </details>
+    </div>
+    <details>
+      <summary>Другие способы записи</summary>
+      <p class="foot">Датчик браузера даёт приблизительный подсчёт, пока трекер открыт на экране. Он выключен при подключённом импорте, чтобы шаги не задвоились.</p>
+      <p id="pedometerStatus" class="muted" role="status">Датчик браузера выключен</p>
+      <div class="steps-controls"><button class="btn alt" id="togglePedometer" type="button">Включить датчик браузера</button></div>
+      <form id="activityForm"><div class="cards"><label class="field">Шаги за день<input type="number" name="steps" min="0" max="100000"></label><label class="field">Минуты активности<input type="number" name="minutes" min="0" max="1440"></label></div><button class="btn alt" type="submit">Сохранить запись</button></form>
+    </details>
   </div>
   <div class="card"><div class="row"><h2>Напитки</h2><strong id="drinkTotal">0 мл</strong></div>
     <p class="muted">Пример на день: 5 стаканов воды и 1 чашка чая. Стакан колы без сахара можно добавить по желанию. Одна отметка — 250 мл.</p>

@@ -1,5 +1,5 @@
 const cachePrefix = 'spider-tracker-';
-const cacheName = cachePrefix + 'public-v2';
+const cacheName = cachePrefix + 'public-v3';
 const assets = ['./', './index.html', './manifest.webmanifest', './icon.svg', './app.css', './features.js'];
 const assetUrls = new Set(assets.map(path => new URL(path, self.registration.scope).href));
 
