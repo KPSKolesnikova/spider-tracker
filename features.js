@@ -200,20 +200,39 @@ $('quickWater').onclick=()=>{
   save();
 };
 
-function renderMeals() {
-  const logged=new Set(day().foods.map(item=>item.meal));
-  $('mealPlan').innerHTML=meals.map(([id,slot,title,cal,,,,recipe,shopping])=>
-    '<article class="meal"><div class="row"><div><p class="help">'+slot+'</p><h3>'+title+'</h3></div><span class="kcal">'+cal+' ккал</span></div><p>'+recipe+'</p><p class="help">'+shopping+'</p><button class="btn alt" data-meal="'+id+'"'+(logged.has(id)?' disabled':'')+'>'+(logged.has(id)?'Добавлено':'+ В дневник')+'</button></article>'
-  ).join('');
+for(const [i,meal] of meals.entries()) recipes[i*10]=[...meal.slice(2,7),meal[7],meal[8]];
+const slots=['Завтрак','Первый перекус','Обед','Второй перекус','Ужин'];
+function selectedRecipe(slot) {
+  const choice=day().menu?.[slot];
+  return Number.isInteger(choice)&&choice>=slot*10&&choice<slot*10+10?choice:slot*10;
 }
-$('mealPlan').addEventListener('click',event=>{
-  const id=event.target.closest('[data-meal]')?.dataset.meal;
-  const meal=meals.find(item=>item[0]===id);
-  if(!meal||day().foods.some(item=>item.meal===id)) return;
-  const [key,,name,cal,p,f,c]=meal;
-  day().foods.push({meal:key,name,cal,p,f,c});
+function renderMeals() {
+  const total=slots.reduce((sum,_,i)=>sum+recipes[selectedRecipe(i)][1],0);
+  $('menuTotal').textContent=total+' ккал';
+  const root=$('mealPlan');
+  const expanded=root.querySelector('details[open]')?.dataset.slot;
+  root.innerHTML=slots.map((label,i)=>{
+    const choice=selectedRecipe(i),[name,cal,p,f,c,ingredients,method]=recipes[choice];
+    const logged=day().foods.find(item=>item.meal===meals[i][0]);
+    const options=recipes.slice(i*10,i*10+10).map(([title,kcal],j)=>'<option value="'+(i*10+j)+'"'+(choice===i*10+j?' selected':'')+'>'+title+' · '+kcal+' ккал</option>').join('');
+    return '<details class="recipeSlot" name="cookbook" data-slot="'+i+'"'+(expanded===String(i)?' open':'')+'><summary><span><small>'+label+'</small><strong>'+name+'</strong></span><b>'+cal+' ккал</b></summary><div class="recipeInside"><label class="field">Выбрать из 10 блюд<select data-choice="'+i+'">'+options+'</select></label><p>'+ingredients+'</p><p>'+method+'</p><p class="help">Б '+p+' г · Ж '+f+' г · У '+c+' г</p><p class="help">Где искать: '+['Дикси, Магнит, Яндекс Лавка','ВкусВилл, Самокат','Магнит, Яндекс Лавка','Дикси, Самокат','ВкусВилл, Магнит'][i]+'.</p><button class="btn alt" data-log="'+i+'" '+(logged?.name===name?'disabled':'')+'>'+(logged?.name===name?'В дневнике':logged?'Заменить запись в дневнике':'Добавить в дневник')+'</button></div></details>';
+  }).join('');
+}
+$('mealPlan').onchange=e=>{
+  if(!e.target.matches('[data-choice]'))return;
+  (day().menu??={})[e.target.dataset.choice]=Number(e.target.value);
   save();
-});
+  $('mealPlan').querySelector('[data-choice="'+e.target.dataset.choice+'"]')?.focus();
+};
+$('mealPlan').onclick=e=>{
+  const button=e.target.closest('[data-log]');
+  if(!button)return;
+  const i=Number(button.dataset.log),[name,cal,p,f,c]=recipes[selectedRecipe(i)];
+  const meal=meals[i][0],entry={meal,name,cal,p,f,c},foods=day().foods;
+  const old=foods.findIndex(item=>item.meal===meal);
+  if(old===-1) foods.push(entry); else foods[old]=entry;
+  save();
+};
 $('useMealGoal').onclick=()=>{
   state.goal=1700;
   save();
@@ -451,3 +470,40 @@ if(!receiveHealthLink() && healthToken) {
     healthMessage('Префикс создан. Запусти команду на iPhone для первого импорта.');
   }
 }
+let monthOffset=0;
+function renderWidgets(){
+  const today=date(),week=currentWeek(), pair=sessionsFor(week);
+  const done=pair.reduce((n,s)=>n+completedChecks(week,s),0);
+  const total=pair.reduce((n,s)=>n+requiredChecks(week,s.type).length,0);
+  const percent=Math.round(done/total*100);
+  $('weekRing').style.setProperty('--done',percent+'%');
+  $('weekRing').textContent=percent+'%';
+  $('weekCaption').textContent=done+' из '+total+' пунктов · неделя '+week;
+  const anchor=localDate(today);
+  anchor.setDate(1);anchor.setMonth(anchor.getMonth()+monthOffset);
+  $('monthLabel').textContent=anchor.toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  const sessions=new Map();
+  for(let w=1;w<=52;w++) sessionsFor(w).forEach((s,i)=>sessions.set(s.key,{w,i,complete:isComplete(w,s)}));
+  const cells=Array((anchor.getDay()+6)%7).fill('<span></span>');
+  const month=anchor.getMonth();
+  while(anchor.getMonth()===month){
+    const key=dateKey(anchor),s=sessions.get(key);
+    cells.push(s?'<button class="'+(s.complete?'finished':'planned')+'" data-week="'+s.w+'" data-which="'+s.i+'" aria-label="Тренировка '+shortDate(key)+'">'+anchor.getDate()+'</button>':'<span>'+anchor.getDate()+'</span>');
+    anchor.setDate(anchor.getDate()+1);
+  }
+  $('monthGrid').innerHTML=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=>'<small>'+d+'</small>').join('')+cells.join('');
+}
+$('monthBack').onclick=()=>{monthOffset--;renderWidgets()};
+$('monthNext').onclick=()=>{monthOffset++;renderWidgets()};
+$('monthGrid').onclick=e=>{const b=e.target.closest('[data-week]');if(b){selectedWeek=Number(b.dataset.week);selectedSession=Number(b.dataset.which);tab('training')}};
+let restEnd=0,restLeft=90;
+function paintTimer(){
+  if(restEnd){restLeft=Math.max(0,Math.ceil((restEnd-Date.now())/1000));if(!restLeft)restEnd=0;}
+  $('restClock').textContent=Math.floor(restLeft/60)+':'+String(restLeft%60).padStart(2,'0');
+  $('restToggle').textContent=restEnd?'Пауза':restLeft===0?'Ещё раз':'Старт';
+}
+$('restToggle').onclick=()=>{paintTimer();restEnd=restEnd?0:Date.now()+(restLeft||90)*1000;paintTimer()};
+$('restReset').onclick=()=>{restLeft=90;restEnd=0;paintTimer()};
+setInterval(()=>{if(restEnd)paintTimer()},500);
+window.addEventListener('tracker-change',renderWidgets);
+renderWidgets();
