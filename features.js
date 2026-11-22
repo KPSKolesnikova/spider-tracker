@@ -1,12 +1,6 @@
 'use strict';
 
-const meals = [
-  ['breakfast','Завтрак','Овсянка с молоком и бананом',390,13,12,57,'Хлопья 45 г, молоко 2,5% 180 мл, банан 100 г, арахисовая паста 7 г. Свари хлопья в молоке, добавь банан и пасту.','Дикси или Магнит: хлопья, молоко, банан. В Яндекс Лавке ищи готовую молочную кашу, добавь банан и пасту до нужной порции.'],
-  ['snack1','Перекус','Греческий йогурт и яблоко',170,14,3,22,'Натуральный греческий йогурт 150 г и яблоко 125 г без сердцевины.','ВкусВилл: греческий йогурт без добавленного сахара. Яблоко можно взять в любой из сетей.'],
-  ['lunch','Обед','Курица с гречкой и салатом',465,49,9,43,'Куриная грудка 140 г, гречка 160 г, огурцы и помидоры 150 г, масло 3 г. Грудку запеки или отвари, масло добавь в салат.','Магнит или Дикси: грудка, крупа и овощи. В Самокате или Яндекс Лавке попробуй поискать курицу с гречкой и салат без заправки.'],
-  ['snack2','Перекус','Творог с ягодами',205,24,8,11,'Творог 5% 150 г, ягоды 50 г. Замороженные ягоды заранее разморозь.','Самокат или ВкусВилл: творог 5% и замороженные ягоды.'],
-  ['dinner','Ужин','Лосось с картофелем и фасолью',470,38,18,40,'Запечённый лосось 140 г, отварной картофель 170 г и стручковая фасоль 130 г. Запекай рыбу с лимоном; масло не включено в расчёт.','Яндекс Лавка или ВкусВилл: ищи запечённую рыбу и овощной гарнир. В Магните можно собрать блюдо из замороженной рыбы и фасоли.'],
-];
+const meals = ['breakfast','snack1','lunch','snack2','dinner'].map(key=>[key]);
 
 const drinks = [
   {key:'water', title:'Вода', labels:['Утром','К завтраку','К обеду','Днём','К ужину']},
@@ -52,7 +46,7 @@ function planStart() {
 }
 function sessionsFor(week) {
   const monday=addDays(planStart(),(week-1)*7);
-  return [{key:monday,type:'A'},{key:addDays(monday,3),type:'B'}];
+  return ['A','B'].map((type,i)=>({type,key:state.schedule?.[week+type]??addDays(monday,i*3)}));
 }
 function currentWeek() {
   const count=Math.round((Date.parse(date())-Date.parse(planStart()))/86400000);
@@ -62,8 +56,12 @@ function statusFor(week) {
   const phase=phases.find(item=>week<=item.weeks);
   return {phase, sets:week%4===0?Math.max(1,phase.sets-1):phase.sets, easy:week%4===0};
 }
+function sessionSets(week,type){
+  const key=sessionsFor(week).find(s=>s.type===type).key;
+  return key<date() && state.sessions?.[key] && !state.sessions[key].newPlan ? statusFor(week).sets : 3;
+}
 function requiredChecks(week,type) {
-  const {sets}=statusFor(week);
+  const sets=sessionSets(week,type);
   return ['warmup',...variants[type].flatMap(id=>Array.from({length:sets},(_,i)=>id+'-'+(i+1)))];
 }
 function detailsFor(key) {
@@ -103,9 +101,9 @@ function renderTraining() {
   const available=sessionsFor(selectedWeek);
   const session=available[selectedSession];
   const entry=detailsFor(session.key);
-  const {phase,sets,easy}=statusFor(selectedWeek);
-  $('phaseNote').textContent=phase.note+(easy?' Облегчённая неделя: на один подход меньше.':'');
-  $('sessionSelect').innerHTML=available.map((item,i)=>'<button class="pill-button" data-session="'+i+'" aria-pressed="'+(i===selectedSession)+'">'+(i===0?'Пн':'Чт')+' · '+shortDate(item.key)+' · '+item.type+(isComplete(selectedWeek,item)?' ✓':'')+'</button>').join('');
+  const sets=sessionSets(selectedWeek,session.type); $('moveDate').value=session.key;
+  $('phaseNote').textContent='DDX · около часа · разминка и 5 упражнений. Вес подбирай по технике и самочувствию.';
+  $('sessionSelect').innerHTML=available.map((item,i)=>'<button class="pill-button" data-session="'+i+'" aria-pressed="'+(i===selectedSession)+'">'+localDate(item.key).toLocaleDateString('ru-RU',{weekday:'short'})+' · '+shortDate(item.key)+' · '+item.type+(isComplete(selectedWeek,item)?' ✓':'')+'</button>').join('');
   const total=requiredChecks(selectedWeek,session.type).length;
   const done=completedChecks(selectedWeek,session);
   const body=$('sessionBody');
@@ -117,8 +115,8 @@ function renderTraining() {
       const [title,starting,technique]=exercises[id];
       const previous=lastWeight(id,session.key);
       const actual=entry.weights?.[id];
-      const reps=id==='core'?'6–10 на сторону':phase.reps;
-      return '<article class="exercise"><div class="row"><div><h3>'+title+'</h3><p class="help">'+sets+' × '+reps+' · '+(previous!=null?'Прошлый вес '+previous+' кг':starting)+'</p></div><label class="field">Вес, кг<input type="number" min="0" max="1000" step="0.1" inputmode="decimal" data-exercise-weight="'+id+'" aria-label="Вес: '+title+'" value="'+(Number.isFinite(actual)?actual:'')+'" placeholder="'+(previous??'')+'"></label></div><details data-exercise="'+id+'"'+(open.includes(id)?' open':'')+'><summary>Техника</summary><p>'+technique+'</p></details><div class="sets">'+Array.from({length:sets},(_,i)=>checkHtml(id+'-'+(i+1),'Подход '+(i+1),entry.checks?.[id+'-'+(i+1)],'data-workout-check')).join('')+'</div></article>';
+      const reps=id==='core'?'15 попеременно':'15+';
+      return '<article class="exercise"><div class="row"><div><h3>'+title+'</h3><p class="help">'+sets+' × '+reps+' · '+(previous!=null?'Прошлый вес '+previous+' кг':starting)+'</p></div><label class="field">Вес, кг<input type="number" min="0" max="1000" step="0.1" inputmode="decimal" data-exercise-weight="'+id+'" aria-label="Вес: '+title+'" value="'+(Number.isFinite(actual)?actual:'')+'" placeholder="'+(previous??'')+'"></label></div><details data-exercise="'+id+'"'+(open.includes(id)?' open':'')+'><summary>Техника</summary><p>'+technique+'</p></details><div class="sets">'+Array.from({length:sets},(_,i)=>checkHtml(id+'-'+(i+1),'Подход '+(i+1),entry.checks?.[id+'-'+(i+1)],'data-workout-check')+'<label class="field">Факт, повт.<input type="number" min="1" max="200" placeholder="15" data-reps="'+id+'-'+(i+1)+'" value="'+(Number(entry.reps?.[id+'-'+(i+1)])||'')+'"></label>').join('')+'</div></article>';
     }).join('');
 }
 
@@ -126,12 +124,14 @@ function activeSessionData() {
   const key=sessionsFor(selectedWeek)[selectedSession].key;
   state.sessions??={};
   const entry=state.sessions[key]??={};
+  if(key>=date())entry.newPlan=true;
   entry.checks??={};
   entry.weights??={};
   return entry;
 }
 $('sessionBody').addEventListener('change',event=>{
-  const {workoutCheck,exerciseWeight}=event.target.dataset;
+  const {workoutCheck,exerciseWeight,reps}=event.target.dataset;
+  if(reps && event.target.reportValidity()){const entry=activeSessionData();(entry.reps??={})[reps]=event.target.valueAsNumber||null;persistLocal();return;}
   if (workoutCheck) {
     activeSessionData().checks[workoutCheck]=event.target.checked;
     save();
@@ -200,7 +200,7 @@ $('quickWater').onclick=()=>{
   save();
 };
 
-for(const [i,meal] of meals.entries()) recipes[i*10]=[...meal.slice(2,7),meal[7],meal[8]];
+
 const slots=['Завтрак','Первый перекус','Обед','Второй перекус','Ужин'];
 function selectedRecipe(slot) {
   const choice=day().menu?.[slot];
@@ -215,7 +215,7 @@ function renderMeals() {
     const choice=selectedRecipe(i),[name,cal,p,f,c,ingredients,method]=recipes[choice];
     const logged=day().foods.find(item=>item.meal===meals[i][0]);
     const options=recipes.slice(i*10,i*10+10).map(([title,kcal],j)=>'<option value="'+(i*10+j)+'"'+(choice===i*10+j?' selected':'')+'>'+title+' · '+kcal+' ккал</option>').join('');
-    return '<details class="recipeSlot" name="cookbook" data-slot="'+i+'"'+(expanded===String(i)?' open':'')+'><summary><span><small>'+label+'</small><strong>'+name+'</strong></span><b>'+cal+' ккал</b></summary><div class="recipeInside"><label class="field">Выбрать из 10 блюд<select data-choice="'+i+'">'+options+'</select></label><p>'+ingredients+'</p><p>'+method+'</p><p class="help">Б '+p+' г · Ж '+f+' г · У '+c+' г</p><p class="help">Где искать: '+['Дикси, Магнит, Яндекс Лавка','ВкусВилл, Самокат','Магнит, Яндекс Лавка','Дикси, Самокат','ВкусВилл, Магнит'][i]+'.</p><button class="btn alt" data-log="'+i+'" '+(logged?.name===name?'disabled':'')+'>'+(logged?.name===name?'В дневнике':logged?'Заменить запись в дневнике':'Добавить в дневник')+'</button></div></details>';
+    return '<details class="recipeSlot" name="cookbook" data-slot="'+i+'"'+(expanded===String(i)?' open':'')+'><summary><span><small>'+label+'</small><strong>'+name+'</strong></span><b>'+cal+' ккал</b></summary><div class="recipeInside"><label class="field">Выбрать из 10 блюд<select data-choice="'+i+'">'+options+'</select></label><p>'+ingredients+'</p><p>'+method+'</p><p class="help">Б '+p+' г · Ж '+f+' г · У '+c+' г</p><p class="help">Где искать: '+['Ozon fresh, Магнит, Яндекс Лавка','ВкусВилл, Самокат','Магнит, Яндекс Лавка','Дикси, Самокат','ВкусВилл, Магнит'][i]+'.</p><button class="btn alt" data-log="'+i+'" '+(logged?.name===name?'disabled':'')+'>'+(logged?.name===name?'В дневнике':logged?'Заменить запись в дневнике':'Добавить в дневник')+'</button></div></details>';
   }).join('');
 }
 $('mealPlan').onchange=e=>{
@@ -507,3 +507,42 @@ $('restReset').onclick=()=>{restLeft=90;restEnd=0;paintTimer()};
 setInterval(()=>{if(restEnd)paintTimer()},500);
 window.addEventListener('tracker-change',renderWidgets);
 renderWidgets();
+
+function paintWellbeing(){
+ const d=day();
+ for(const b of $('energyButtons').querySelectorAll('button'))b.setAttribute('aria-pressed',String(d.energy===b.dataset.energy));
+ $('bedTime').value=d.bedTime||'00:30';
+ $('wakeTime').value=d.wakeTime||'';
+ const [h,m]=$('bedTime').value.split(':').map(Number);
+ const duration=d.energy==='Мало'?9:8;
+ const wake=String((h+duration)%24).padStart(2,'0')+':'+String(m).padStart(2,'0');
+ $('wakeHint').textContent='Для свободного утра можно выбрать '+wake+' — это '+duration+' ч от указанного времени. Ориентируйся на самочувствие.';
+ $('recoveryChoice').value=d.recovery||'';
+ $('restDay').textContent=d.rest?'Вернуться к обычному дню':'День отдыха';
+ $('daySummary').textContent=(d.rest?'Сегодня можно отдохнуть. Выбери прогулку, CS, GTA, фильм или задачу для удовольствия. ':d.energy==='Мало'?'Сегодня можно выбрать спокойный темп. ':'')+(d.built?'Меню собрано: '+slots.map((_,i)=>recipes[selectedRecipe(i)][0]).join(' · '):'Собери пять приёмов пищи на сегодня.');
+ if(d.rest)$('todayPlan').textContent='День восстановления. Дату зала можно выбрать отдельно.';
+}
+$('energyButtons').onclick=e=>{if(e.target.dataset.energy){day().energy=e.target.dataset.energy;save()}};
+for(const [id,key] of [['bedTime','bedTime'],['wakeTime','wakeTime'],['recoveryChoice','recovery']])$(id).onchange=e=>{day()[key]=e.target.value;save()};
+$('restDay').onclick=()=>{day().rest=!day().rest;save()};
+$('pickTraining').onclick=()=>{selectedWeek=currentWeek();tab('training');$('moveDate').focus()};
+$('buildDay').onclick=()=>{
+ const target=Number(state.goal)||1700;
+ let best,delta=Infinity;
+ for(let k=0;k<120;k++){
+ const menu=slots.map((_,i)=>10*i+Math.floor(Math.random()*10));
+ const diff=Math.abs(menu.reduce((a,j)=>a+recipes[j][1],0)-target);
+ if(diff<delta){delta=diff;best=menu}
+ }
+ day().menu=best;day().built=true;save();tab('food');
+};
+$('moveWorkout').onclick=()=>{
+ const week=selectedWeek,pair=sessionsFor(week),session=pair[selectedSession],dest=$('moveDate').value;
+ const start=addDays(planStart(),(week-1)*7);
+ if(!dest||dest<start||dest>addDays(start,6)||dest===pair[1-selectedSession].key){$('moveStatus').textContent='Выбери отдельный день внутри этой недели.';return}
+ if(dest!==session.key && state.sessions?.[dest]){$('moveStatus').textContent='На эту дату уже есть записи.';return}
+ if(dest!==session.key && state.sessions?.[session.key]){state.sessions[dest]=state.sessions[session.key];delete state.sessions[session.key]}
+ (state.schedule??={})[week+session.type]=dest;$('weekSelect').dataset.start='';save();$('moveStatus').textContent='Тренировка запланирована на '+shortDate(dest);
+};
+window.addEventListener('tracker-change',paintWellbeing);
+paintWellbeing();
