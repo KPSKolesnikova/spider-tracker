@@ -1,6 +1,6 @@
 const cachePrefix = 'spider-tracker-';
-const cacheName = cachePrefix + 'public-v1';
-const assets = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
+const cacheName = cachePrefix + 'public-v2';
+const assets = ['./', './index.html', './manifest.webmanifest', './icon.svg', './app.css', './features.js'];
 const assetUrls = new Set(assets.map(path => new URL(path, self.registration.scope).href));
 
 self.addEventListener('install', event => {
