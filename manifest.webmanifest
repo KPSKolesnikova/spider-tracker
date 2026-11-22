@@ -1,0 +1,17 @@
+{
+  "name": "Spider Tracker — Level Up",
+  "short_name": "SPIDER TRACKER",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#20282e",
+  "theme_color": "#287eab",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
